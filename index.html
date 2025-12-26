@@ -63,6 +63,20 @@
             border: none;
             border-radius: 5px;
         }
+        .fs-btn {
+            margin-left: 10px;
+            background: #007bff;
+        }
+
+        /* Fullscreen mode: make container fill the viewport */
+        .split-screen:-webkit-full-screen,
+        .split-screen:-moz-full-screen,
+        .split-screen:fullscreen {
+            width: 100%;
+            height: 100%;
+            max-width: none;
+            aspect-ratio: unset;
+        }
     </style>
 </head>
 <body>
@@ -79,6 +93,7 @@
     </div>
 
     <button class="play-btn" onclick="syncPlay()">同時再生 / 一時停止</button>
+    <button class="play-btn fs-btn" id="fsBtn" onclick="toggleFullscreen()">フルスクリーン</button>
 
     <div class="controls">
         <div class="select-box">
@@ -167,6 +182,38 @@
                 selectB.appendChild(o2);
             });
         }
+
+        // Fullscreen handling -------------------------------------------------
+        const container = document.querySelector('.split-screen');
+
+        function toggleFullscreen() {
+            const doc = document;
+            // if there is no fullscreen element, request it on the container
+            if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.mozFullScreenElement && !doc.msFullscreenElement) {
+                if (container.requestFullscreen) container.requestFullscreen();
+                else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
+                else if (container.mozRequestFullScreen) container.mozRequestFullScreen();
+                else if (container.msRequestFullscreen) container.msRequestFullscreen();
+            } else {
+                if (doc.exitFullscreen) doc.exitFullscreen();
+                else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+                else if (doc.mozCancelFullScreen) doc.mozCancelFullScreen();
+                else if (doc.msExitFullscreen) doc.msExitFullscreen();
+            }
+        }
+
+        // ダブルクリックでフルスクリーン切替
+        if (container) {
+            container.addEventListener('dblclick', toggleFullscreen);
+        }
+
+        // 'f'キーでトグル（入力フォーカス中は無効）
+        document.addEventListener('keydown', (e) => {
+            const active = document.activeElement;
+            const inInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+            if (inInput) return;
+            if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+        });
 
         // ページ読み込み時に一覧を取得
         document.addEventListener('DOMContentLoaded', () => {
