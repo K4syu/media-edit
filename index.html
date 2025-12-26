@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動画分割・合体プレイヤー</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; padding: 20px; }
+        
+        /* 動画を表示するコンテナ */
+        .split-screen {
+            display: flex;
+            width: 90%;
+            max-width: 1000px;
+            aspect-ratio: 16 / 9; /* 動画の標準比率 */
+            margin: 20px auto;
+            border: 4px solid #444;
+            overflow: hidden;
+            background: black;
+        }
+
+        /* 各動画のスタイル（左半分を表示） */
+        .left-half-video {
+            width: 50%; /* 画面の半分 */
+            height: 100%;
+            object-fit: cover; /* 領域を埋める */
+            object-position: left; /* 「左半分」を表示の基準にする */
+            border: none;
+        }
+
+        .right-half-video {
+            width: 50%; /* 画面の半分 */
+            height: 100%;
+            object-fit: cover; /* 領域を埋める */
+            object-position: right; /* 「右半分」を表示の基準にする */
+            border: none;
+        }
+
+        /* 選択エリア */
+        .controls {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+        .select-box {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            width: 45%;
+        }
+        select {
+            padding: 8px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .play-btn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>2つの動画を合体再生</h1>
+
+    <div class="split-screen">
+        <video id="videoA" class="left-half-video" muted playsinline>
+            <source src="" type="video/mp4">
+        </video>
+        <video id="videoB" class="right-half-video" muted playsinline>
+            <source src="" type="video/mp4">
+        </video>
+    </div>
+
+    <button class="play-btn" onclick="syncPlay()">同時再生 / 一時停止</button>
+
+    <div class="controls">
+        <div class="select-box">
+            <h3>左側の映像 (動画A)</h3>
+            <select id="selectA" onchange="changeVideo('A')">
+                <option value="">動画を選択してください</option>
+            </select>
+        </div>
+
+        <div class="select-box">
+            <h3>右側の映像 (動画B)</h3>
+            <select id="selectB" onchange="changeVideo('B')">
+                <option value="">動画を選択してください</option>
+            </select>
+        </div>
+    </div>
+
+    <script>
+        const vA = document.getElementById('videoA');
+        const vB = document.getElementById('videoB');
+        const selectA = document.getElementById('selectA');
+        const selectB = document.getElementById('selectB');
+
+        // 動画ファイルの変更
+        function changeVideo(side) {
+            if (side === 'A') {
+                const url = selectA.value;
+                if (!url) return;
+                vA.src = url;
+                vA.load();
+            } else {
+                const url = selectB.value;
+                if (!url) return;
+                vB.src = url;
+                vB.load();
+            }
+        }
+
+        // 同時再生・一時停止の制御
+        function syncPlay() {
+            // どちらかにソースが設定されている必要がある
+            if (vA.paused) {
+                // 再生位置を合わせてから再生
+                try { vB.currentTime = vA.currentTime; } catch (e) { /* ignore */ }
+                vA.play();
+                vB.play();
+            } else {
+                vA.pause();
+                vB.pause();
+            }
+        }
+
+        // シークや再生の同期
+        vA.onseeked = () => { try { vB.currentTime = vA.currentTime; } catch (e) {} };
+        vB.onseeked = () => { try { vA.currentTime = vB.currentTime; } catch (e) {} };
+        vA.onplay = () => { if (vB.paused) { try { vB.currentTime = vA.currentTime; vB.play(); } catch (e) {} } };
+        vB.onplay = () => { if (vA.paused) { try { vA.currentTime = vB.currentTime; vA.play(); } catch (e) {} } };
+
+        // 動画一覧を取得してselectに追加する
+        async function loadVideoList() {
+            try {
+                const res = await fetch('video/videos.json', {cache: 'no-store'});
+                if (!res.ok) throw new Error('videos.json を取得できません: ' + res.status);
+                const list = await res.json();
+                populateSelects(list);
+            } catch (err) {
+                console.error('動画一覧の読み込みエラー', err);
+                // エラー時はUIに通知する（シンプルなアラート）
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '一覧の読み込みに失敗しました（サーバで videos.json を生成してください）';
+                selectA.appendChild(opt);
+                selectB.appendChild(opt.cloneNode(true));
+            }
+        }
+
+        function populateSelects(list) {
+            // listは [{ name: 'movie1.mp4', url: 'video/movie1.mp4' }, ...]
+            list.forEach(item => {
+                const o1 = document.createElement('option');
+                o1.value = item.url;
+                o1.textContent = item.name;
+                selectA.appendChild(o1);
+
+                const o2 = o1.cloneNode(true);
+                selectB.appendChild(o2);
+            });
+        }
+
+        // ページ読み込み時に一覧を取得
+        document.addEventListener('DOMContentLoaded', () => {
+            loadVideoList();
+        });
+    </script>
+
+</body>
+</html>
