@@ -1,0 +1,10 @@
+# GitHub's file size limit is 100MB.
+# Ignoring files larger than 100MB
+video/佐賀_12時.mp4
+video/新潟_22時.mp4
+video/青森_15時.mp4
+video/福岡_10時.mp4
+
+# OS generated files
+.DS_Store
+**/.DS_Store

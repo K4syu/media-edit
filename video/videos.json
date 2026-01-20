@@ -1,6 +1,30 @@
 [
   {
+    "name": "佐賀_12時.mp4",
+    "url": "video/佐賀_12時.mp4"
+  },
+  {
+    "name": "北海道_18時.mp4",
+    "url": "video/北海道_18時.mp4"
+  },
+  {
+    "name": "新潟_22時.mp4",
+    "url": "video/新潟_22時.mp4"
+  },
+  {
     "name": "熊本_20時.mp4",
     "url": "video/熊本_20時.mp4"
+  },
+  {
+    "name": "福岡_10時.mp4",
+    "url": "video/福岡_10時.mp4"
+  },
+  {
+    "name": "青森_13時.mp4",
+    "url": "video/青森_13時.mp4"
+  },
+  {
+    "name": "青森_15時.mp4",
+    "url": "video/青森_15時.mp4"
   }
 ]

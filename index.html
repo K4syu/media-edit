@@ -81,13 +81,13 @@
 </head>
 <body>
 
-    <h1>2つの動画を合体再生</h1>
+    <!-- <h1>2つの動画を合体再生</h1> -->
 
     <div class="split-screen">
-        <video id="videoA" class="left-half-video" muted playsinline>
+        <video id="videoA" class="left-half-video" playsinline controls>
             <source src="" type="video/mp4">
         </video>
-        <video id="videoB" class="right-half-video" muted playsinline>
+        <video id="videoB" class="right-half-video" playsinline controls>
             <source src="" type="video/mp4">
         </video>
     </div>
@@ -124,33 +124,169 @@
                 if (!url) return;
                 vA.src = url;
                 vA.load();
+                updateSelectAvailability();
             } else {
                 const url = selectB.value;
                 if (!url) return;
                 vB.src = url;
                 vB.load();
+                updateSelectAvailability();
             }
         }
 
         // 同時再生・一時停止の制御
         function syncPlay() {
             // どちらかにソースが設定されている必要がある
-            if (vA.paused) {
-                // 再生位置を合わせてから再生
-                try { vB.currentTime = vA.currentTime; } catch (e) { /* ignore */ }
-                vA.play();
-                vB.play();
+            // 自動同期は行わない。ユーザーの操作で同時に再生/一時停止するのみ。
+            const bothPaused = vA.paused && vB.paused;
+            if (bothPaused) {
+                // 両方を再生（位置合わせはしない）
+                if (vA.src) vA.play();
+                if (vB.src) vB.play();
             } else {
-                vA.pause();
-                vB.pause();
+                // どれか再生中なら両方を一時停止
+                if (!vA.paused) vA.pause();
+                if (!vB.paused) vB.pause();
             }
         }
 
-        // シークや再生の同期
-        vA.onseeked = () => { try { vB.currentTime = vA.currentTime; } catch (e) {} };
-        vB.onseeked = () => { try { vA.currentTime = vB.currentTime; } catch (e) {} };
-        vA.onplay = () => { if (vB.paused) { try { vB.currentTime = vA.currentTime; vB.play(); } catch (e) {} } };
-        vB.onplay = () => { if (vA.paused) { try { vA.currentTime = vB.currentTime; vA.play(); } catch (e) {} } };
+            // NOTE: 自動同期を無効化しました — ユーザーが選択した映像は左右独立に再生されます。
+            // 同じ動画を両方で選べないように、選択肢の無効化ロジックを追加します。
+
+            function updateSelectAvailability() {
+                const aVal = selectA.value;
+                const bVal = selectB.value;
+
+                // selectA の各 option を、selectB の選択と重複するものは無効化
+                for (const opt of selectA.options) {
+                    // 空のデフォルトは無効化しない
+                    if (!opt.value) { opt.disabled = false; continue; }
+                    opt.disabled = (opt.value === bVal);
+                }
+
+                // selectB の各 option を、selectA の選択と重複するものは無効化
+                for (const opt of selectB.options) {
+                    if (!opt.value) { opt.disabled = false; continue; }
+                    opt.disabled = (opt.value === aVal);
+                }
+
+                // もし無効になってしまった選択肢が現在選ばれている場合はデフォルトに戻す
+                if (selectA.value && selectA.selectedOptions[0] && selectA.selectedOptions[0].disabled) {
+                    selectA.value = '';
+                    // clear video source if needed
+                    vA.removeAttribute('src');
+                    vA.load();
+                }
+                if (selectB.value && selectB.selectedOptions[0] && selectB.selectedOptions[0].disabled) {
+                    selectB.value = '';
+                    vB.removeAttribute('src');
+                    vB.load();
+                }
+            }
+
+            // 再生を一時停止したときに vA の時間に vB を合わせるユーティリティ
+            function alignBtoA() {
+                try {
+                    if (vA && vB && vA.src && vB.src) {
+                        vB.currentTime = vA.currentTime;
+                    }
+                } catch (e) {
+                    // 一部ブラウザや未ロード状態で currentTime 設定が例外になる場合があるので無視
+                }
+            }
+
+            // ネイティブ操作で片方を一時停止したときにも揃える
+            vA.addEventListener('pause', () => {
+                alignBtoA();
+            });
+            vB.addEventListener('pause', () => {
+                alignBtoA();
+            });
+
+            // --- Web Audio: 左右パンニング設定 -------------------------------------------------
+            // 各 video の音声を Web Audio にルーティングして、左は左チャンネル、右は右チャンネルから出す
+            let audioCtx = null;
+            const audioNodes = {
+                A: { source: null, panner: null, gain: null, initialized: false },
+                B: { source: null, panner: null, gain: null, initialized: false }
+            };
+
+            function ensureAudioContext() {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                return audioCtx;
+            }
+
+            function setupAudioFor(side) {
+                const ctx = ensureAudioContext();
+                const target = (side === 'A') ? vA : vB;
+                const nodeRec = audioNodes[side];
+
+                // 既に初期化済みなら何もしない
+                if (nodeRec.initialized) return;
+
+                try {
+                    // createMediaElementSource は同じ media element に対して一度だけ作るべき
+                    const srcNode = ctx.createMediaElementSource(target);
+                    const gainNode = ctx.createGain();
+                    const panner = (ctx.createStereoPanner) ? ctx.createStereoPanner() : null;
+
+                    // 左は -1、右は +1
+                    if (panner) panner.pan.value = (side === 'A') ? -1 : 1;
+
+                    // 接続: source -> gain -> panner? -> destination
+                    srcNode.connect(gainNode);
+                    if (panner) {
+                        gainNode.connect(panner);
+                        panner.connect(ctx.destination);
+                    } else {
+                        // StereoPanner が無い場合は直接 destination に接続
+                        gainNode.connect(ctx.destination);
+                    }
+
+                    nodeRec.source = srcNode;
+                    nodeRec.gain = gainNode;
+                    nodeRec.panner = panner;
+                    nodeRec.initialized = true;
+                } catch (e) {
+                    // ブラウザが createMediaElementSource を許可しない場合や同一要素で複数回呼ばれた場合に例外が出る
+                    console.warn('Audio routing failed for', side, e);
+                }
+            }
+
+            // ユーザー操作で再生された時に AudioContext を resume して接続を作る
+            vA.addEventListener('play', () => {
+                try {
+                    setupAudioFor('A');
+                    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                } catch (e) {}
+            });
+            vB.addEventListener('play', () => {
+                try {
+                    setupAudioFor('B');
+                    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                } catch (e) {}
+            });
+
+            // 動画を change したときは（必要なら）再設定する
+            function teardownAudioFor(side) {
+                const nodeRec = audioNodes[side];
+                if (!nodeRec.initialized) return;
+                try {
+                    if (nodeRec.source) {
+                        // MediaElementAudioSourceNode は disconnect する
+                        nodeRec.source.disconnect();
+                    }
+                    if (nodeRec.gain) nodeRec.gain.disconnect();
+                    if (nodeRec.panner) nodeRec.panner.disconnect();
+                } catch (e) {}
+                nodeRec.source = null;
+                nodeRec.gain = null;
+                nodeRec.panner = null;
+                nodeRec.initialized = false;
+            }
+
 
         // 動画一覧を取得してselectに追加する
         async function loadVideoList() {
@@ -181,6 +317,9 @@
                 const o2 = o1.cloneNode(true);
                 selectB.appendChild(o2);
             });
+
+            // 初期状態で同じ選択ができないように更新
+            updateSelectAvailability();
         }
 
         // Fullscreen handling -------------------------------------------------
