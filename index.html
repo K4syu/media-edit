@@ -77,6 +77,21 @@
             max-width: none;
             aspect-ratio: unset;
         }
+
+        /* iOS / Mobile Safari fallback for split-screen fullscreen */
+        .split-screen.pseudo-fullscreen {
+            position: fixed !important;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none !important;
+            aspect-ratio: unset !important;
+            z-index: 9999;
+            background: black;
+            margin: 0;
+            border: none;
+        }
     </style>
 </head>
 <body>
@@ -337,17 +352,49 @@
 
         function toggleFullscreen() {
             const doc = document;
-            // if there is no fullscreen element, request it on the container
-            if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.mozFullScreenElement && !doc.msFullscreenElement) {
-                if (container.requestFullscreen) container.requestFullscreen();
-                else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
-                else if (container.mozRequestFullScreen) container.mozRequestFullScreen();
-                else if (container.msRequestFullscreen) container.msRequestFullscreen();
+            // Native API support (w3c, webkit, moz, ms)
+            const requestFs = container.requestFullscreen || 
+                            container.webkitRequestFullscreen || 
+                            container.mozRequestFullScreen || 
+                            container.msRequestFullscreen;
+            const exitFs = doc.exitFullscreen || 
+                        doc.webkitExitFullscreen || 
+                        doc.mozCancelFullScreen || 
+                        doc.msExitFullscreen;
+            
+            // Check if native fullscreen is active
+            const activeFsElement = doc.fullscreenElement || 
+                                    doc.webkitFullscreenElement || 
+                                    doc.mozFullScreenElement || 
+                                    doc.msFullscreenElement;
+
+            // Check if pseudo fullscreen is active
+            const isPseudo = container.classList.contains('pseudo-fullscreen');
+
+            // --- Case 1: Exit Fullscreen ---
+            if (activeFsElement || isPseudo) {
+                if (activeFsElement && exitFs) {
+                    exitFs.call(doc).catch(e => console.log(e));
+                }
+                if (isPseudo) {
+                    container.classList.remove('pseudo-fullscreen');
+                }
+                return;
+            }
+
+            // --- Case 2: Enter Fullscreen ---
+            // iOS Safari does not support requestFullscreen on div elements.
+            // We check if the method exists. If not, or if it fails, we fall back to pseudo-fullscreen.
+            if (requestFs) {
+                requestFs.call(container).then(() => {
+                    // Success native
+                }).catch(err => {
+                    console.log('Native fullscreen disallowed or failed. Using CSS fallback.', err);
+                    container.classList.add('pseudo-fullscreen');
+                });
             } else {
-                if (doc.exitFullscreen) doc.exitFullscreen();
-                else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
-                else if (doc.mozCancelFullScreen) doc.mozCancelFullScreen();
-                else if (doc.msExitFullscreen) doc.msExitFullscreen();
+                // No native support (likely iOS Safari on div)
+                container.classList.add('pseudo-fullscreen');
             }
         }
 
