@@ -84,10 +84,10 @@
     <!-- <h1>2つの動画を合体再生</h1> -->
 
     <div class="split-screen">
-        <video id="videoA" class="left-half-video" playsinline controls>
+        <video id="videoA" class="left-half-video" playsinline controls crossorigin="anonymous">
             <source src="" type="video/mp4">
         </video>
-        <video id="videoB" class="right-half-video" playsinline controls>
+        <video id="videoB" class="right-half-video" playsinline controls crossorigin="anonymous">
             <source src="" type="video/mp4">
         </video>
     </div>
@@ -135,14 +135,24 @@
         }
 
         // 同時再生・一時停止の制御
-        function syncPlay() {
+        async function syncPlay() {
+            // iOSなどのために、クリックイベント内で必ずAudioContextをResumeする
+            try {
+                const ctx = ensureAudioContext();
+                if (ctx.state === 'suspended') {
+                    await ctx.resume();
+                }
+            } catch(e) { console.error('AudioContext resume failed', e); }
+
             // どちらかにソースが設定されている必要がある
             // 自動同期は行わない。ユーザーの操作で同時に再生/一時停止するのみ。
             const bothPaused = vA.paused && vB.paused;
             if (bothPaused) {
                 // 両方を再生（位置合わせはしない）
-                if (vA.src) vA.play();
-                if (vB.src) vB.play();
+                const pA = vA.src ? vA.play().catch(e => console.error('Error playing A:', e)) : Promise.resolve();
+                const pB = vB.src ? vB.play().catch(e => console.error('Error playing B:', e)) : Promise.resolve();
+                
+                await Promise.all([pA, pB]);
             } else {
                 // どれか再生中なら両方を一時停止
                 if (!vA.paused) vA.pause();
