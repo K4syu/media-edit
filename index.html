@@ -110,6 +110,13 @@
     <button class="play-btn" onclick="syncPlay()">同時再生 / 一時停止</button>
     <button class="play-btn fs-btn" id="fsBtn" onclick="toggleFullscreen()">フルスクリーン</button>
 
+    <div style="margin-top: 15px;">
+        <label style="font-size: 1rem; cursor: pointer; background: #333; padding: 10px 20px; border-radius: 5px; display: inline-block;">
+            <input type="checkbox" id="muteToggle" onchange="toggleMute()"> 
+            スマホで同時再生できない場合はチェック (ミュート)
+        </label>
+    </div>
+
     <div class="controls">
         <div class="select-box">
             <h3>左側の映像 (動画A)</h3>
@@ -131,6 +138,13 @@
         const vB = document.getElementById('videoB');
         const selectA = document.getElementById('selectA');
         const selectB = document.getElementById('selectB');
+        const muteCheck = document.getElementById('muteToggle');
+
+        function toggleMute() {
+            const isMuted = muteCheck.checked;
+            vA.muted = isMuted;
+            vB.muted = isMuted;
+        }
 
         // 動画ファイルの変更
         function changeVideo(side) {
